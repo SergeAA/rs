@@ -23,9 +23,12 @@ class MainRecommender:
 
         # your_code. Это не обязательная часть. Но если вам удобно что-либо посчитать тут - можно это сделать
 
+        self.data = data
         self.user_item_matrix = self.prepare_matrix(data)  # pd.DataFrame
+        self.user_top = self.top_user_actual(data)
+
         self.id_to_itemid, self.id_to_userid, \
-            self.itemid_to_id, self.userid_to_id = prepare_dicts(self.user_item_matrix)
+            self.itemid_to_id, self.userid_to_id = self.prepare_dicts(self.user_item_matrix)
 
         if weighting:
             self.user_item_matrix = bm25_weight(self.user_item_matrix.T).T
@@ -34,11 +37,23 @@ class MainRecommender:
         self.own_recommender = self.fit_own_recommender(self.user_item_matrix)
 
     @staticmethod
+    def top_user_actual(data):
+        popularity = data.groupby(['user_id', 'item_id'])['quantity'].count().reset_index()
+        popularity.sort_values('quantity', ascending=False, inplace=True)
+
+        popularity = popularity[popularity['item_id'] != 999999]
+        popularity = popularity.groupby('user_id').head(5)
+
+        popularity.sort_values('user_id', ascending=False, inplace=True)
+        return popularity
+
+    @staticmethod
     def prepare_matrix(data):
-
-        # your_code
-
-        return user_item_matrix
+        return pd.pivot_table(data,
+                              index='user_id', columns='item_id',
+                              #                               values='quantity', aggfunc='count',
+                              values='weight', aggfunc='mean',
+                              fill_value=0).astype(float)
 
     @staticmethod
     def prepare_dicts(user_item_matrix):
@@ -79,71 +94,39 @@ class MainRecommender:
 
         return model
 
+    def get_recommendations(self, user, N=5):
+        res = [self.id_to_itemid[rec[0]] for rec in
+               self.model.recommend(userid=self.userid_to_id[user],
+                                    user_items=csr_matrix(self.user_item_matrix).tocsr(),
+                                    N=N,
+                                    filter_already_liked_items=False,
+                                    filter_items=[self.itemid_to_id[999999]],
+                                    recalculate_user=True)]
+        return res
+
     def get_similar_items_recommendation(self, user, N=5):
         """Рекомендуем товары, похожие на топ-N купленных юзером товаров"""
 
-        # your_code
-        # Практически полностью реализовали на прошлом вебинаре
+        def get_rec(x):
+            recs = self.model.similar_items(self.itemid_to_id[x], N=2)
+            top_rec = recs[1][0]
+            return self.id_to_itemid[top_rec]
 
-        assert len(res) == N, 'Количество рекомендаций != {}'.format(N)
+        self.user_top['similar_recommendation'] = self.user_top['item_id'].apply(lambda x: get_rec(x))
+        res = self.user_top.groupby('user_id')['similar_recommendation'].unique().reset_index()
+        res.columns = ['user_id', 'similar_recommendation']
+
         return res
 
     def get_similar_users_recommendation(self, user, N=5):
         """Рекомендуем топ-N товаров, среди купленных похожими юзерами"""
 
-        # your_code
+        topusers = self.model.similar_users(self.userid_to_id[user], N=6)
+        topusers = [self.id_to_userid[i[0]] for i in topusers[1:]]
 
-        assert len(res) == N, 'Количество рекомендаций != {}'.format(N)
-        return res
+        data = self.data[self.data['user_id'].isin(topusers)]
+        data = data[data['item_id'] != 999999]
 
-
-"""
-
-model = AlternatingLeastSquares(factors=100,
-                                regularization=0.001,
-                                iterations=15,
-                                calculate_training_loss=True,
-                                num_threads=4)
-
-model.fit(csr_matrix(user_item_matrix).T.tocsr(),  # На вход item-user matrix
-          show_progress=True)
-
-recs = model.recommend(userid=userid_to_id[2],  # userid - id от 0 до N
-                        user_items=csr_matrix(user_item_matrix).tocsr(),   # на вход user-item matrix
-                        N=5, # кол-во рекомендаций
-                        filter_already_liked_items=False,
-                        filter_items=None,
-                        recalculate_user=True)
-
-[id_to_itemid[rec[0]] for rec in recs]
-
-
-def get_recommendations(user, model, N=5):
-    res = [id_to_itemid[rec[0]] for rec in
-                    model.recommend(userid=userid_to_id[user],
-                                    user_items=sparse_user_item,   # на вход user-item matrix
-                                    N=N,
-                                    filter_already_liked_items=False,
-                                    filter_items=None,
-                                    recalculate_user=True)]
-    return res
-
-
-result['als'] = result['user_id'].apply(lambda x: get_recommendations(x, model=model, N=5))
-result.apply(lambda row: precision_at_k(row['als'], row['actual']), axis=1).mean()
-
-
-
----
-
-user_item_matrix = pd.pivot_table(data_train,
-                                  index='user_id', columns='item_id',
-                                  values='quantity', # Можно пробоват ьдругие варианты
-                                  aggfunc='count',
-                                  fill_value=0
-                                 )
-
-user_item_matrix = user_item_matrix.astype(float) # необходимый тип матрицы для implicit
-
-user_item_matrix.head(3)
-"""
+        popularity = data.groupby('item_id')['quantity'].count().reset_index()
+        popularity.sort_values('quantity', ascending=False, inplace=True)
+        return popularity.drop_duplicates('item_id').head(5).item_id.to_list()
