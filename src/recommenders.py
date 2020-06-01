@@ -51,7 +51,7 @@ class MainRecommender:
     def prepare_matrix(data):
         return pd.pivot_table(data,
                               index='user_id', columns='item_id',
-                              #                               values='quantity', aggfunc='count',
+                              # values='quantity', aggfunc='count',
                               values='weight', aggfunc='mean',
                               fill_value=0).astype(float)
 
