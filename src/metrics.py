@@ -1,6 +1,17 @@
 import numpy as np
 
 
+def total_precision_at_N(data, N=5, true='actual'):
+    flds = [i.replace('recommend_', '') for i in list(data.columns) if i.find('recommend_') >= 0]
+
+    def calc_pr(row):
+        for i in flds:
+            row[f'precision_{i}'] = len(set(row[f'recommend_{i}'][:N]) & set(row[true])) / N
+        return row
+
+    return data.apply(lambda row: calc_pr(row), axis=1)
+
+
 def hit_rate_at_k(recommended_list, bought_list, k=5):
     bought_list = np.array(bought_list)
     recommended_list = np.array(recommended_list[:k])
