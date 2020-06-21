@@ -349,9 +349,9 @@ class Level2Recommender():
         X[self.nums] = self.sc.fit_transform(X[self.nums])
 
         # Убираем дисбаланс классов
-        cf = [X[self.cols].dtypes == 'category']
-        X, y = SMOTENC(random_state=42, sampling_strategy=0.7,
-                       categorical_features=cf).fit_resample(X[self.cols], y)
+        # cf = [X[self.cols].dtypes == 'category']
+        # X, y = SMOTENC(random_state=42, sampling_strategy=0.3,
+        #                categorical_features=cf).fit_resample(X[self.cols], y)
         X = pd.DataFrame(X, columns=self.cols)
         X[self.cats] = X[self.cats].astype('category')
         X[self.nums] = X[self.nums].astype(float)
