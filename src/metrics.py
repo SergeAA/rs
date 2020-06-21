@@ -9,7 +9,7 @@ def total_precision_at_N(data, N=5, true='actual'):
             row[f'precision_{i}'] = len(set(row[f'recommend_{i}'][:N]) & set(row[true])) / N
         return row
 
-    return data.apply(lambda row: calc_pr(row), axis=1)
+    return data.apply(lambda row: calc_pr(row), axis=1).mean().drop('user_id').sort_values(ascending=False)
 
 
 def hit_rate_at_k(recommended_list, bought_list, k=5):
